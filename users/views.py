@@ -9,9 +9,10 @@ from django.contrib.auth.tokens import default_token_generator
 from django.contrib.auth.decorators import login_required, user_passes_test
 from django.db.models import Prefetch
 from django.contrib.auth.views import LoginView, PasswordChangeView, PasswordResetView, PasswordResetConfirmView
-from django.views.generic import TemplateView, UpdateView
+from django.views.generic import TemplateView, UpdateView, View
 from django.urls import reverse_lazy
 from django.contrib.auth import get_user_model
+from django.contrib.auth.mixins import LoginRequiredMixin, PermissionRequiredMixin
 
 User = get_user_model()
 
@@ -162,25 +163,34 @@ def assign_role(request, user_id):
     return render(request, 'admin/assign_role.html', {"form": form})
 
 
-@user_passes_test(is_admin, login_url='no-permission')
-def create_group(request):
-    form = CreateGroupForm()
-    if request.method == 'POST':
-        form = CreateGroupForm(request.POST)
+# =========================== convert class base+========================
+class CreateGroupView(LoginRequiredMixin, PermissionRequiredMixin, View):
+    permission_required = 'auth.add_group'
+    login_url = 'no-permission'
+    template_name = 'admin/create_group.html'
+    form_class = CreateGroupForm
 
+    def get(self, request, *args, **kwargs):
+        form = self.form_class()
+        return render(request, self.template_name, {'form': form})
+
+    def post(self, request, *args, **kwargs):
+        form = self.form_class(request.POST)
         if form.is_valid():
             group = form.save()
-            messages.success(request, f"Group {
-                             group.name} has been created successfully")
+            messages.success(request, f"Group {group.name} has been created successfully")
             return redirect('create-group')
+        return render(request, self.template_name, {'form': form})
 
-    return render(request, 'admin/create_group.html', {'form': form})
 
+class GroupListView(LoginRequiredMixin, PermissionRequiredMixin, View):
+    permission_required = 'auth.view_group'
+    login_url = 'no-permission'
+    template_name = 'admin/group_list.html'
 
-@user_passes_test(is_admin, login_url='no-permission')
-def group_list(request):
-    groups = Group.objects.prefetch_related('permissions').all()
-    return render(request, 'admin/group_list.html', {'groups': groups})
+    def get(self, request, *args, **kwargs):
+        groups = Group.objects.prefetch_related('permissions').all()
+        return render(request, self.template_name, {'groups': groups})
 
 
 class ProfileView(TemplateView):
@@ -229,18 +239,3 @@ class CustomPasswordResetConfirmView(PasswordResetConfirmView):
         messages.success(
             self.request, 'Password reset successfully')
         return super().form_valid(form)
-
-
-""" 
-
-    Admin
-        - Sobkisui
-    Manager
-        - project
-        - task create
-    Employee
-        - Task read
-        - Task update
-    
-    Role Based Access Control (RBAC)
-"""

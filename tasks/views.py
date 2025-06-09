@@ -197,18 +197,31 @@ class UpdateTask(UpdateView):
             return redirect('update-task', self.object.id)
         return redirect('update-task', self.object.id)
 
+#====================  Convert to class based view================
+class DeleteTask(LoginRequiredMixin, PermissionRequiredMixin, View):
+    permission_required = 'tasks.delete_task'
+    login_url = 'no-permission'
 
-@login_required
-@permission_required("tasks.delete_task", login_url='no-permission')
-def delete_task(request, id):
-    if request.method == 'POST':
-        task = Task.objects.get(id=id)
+    def post(self, request, *args, **kwargs):
+        task = Task.objects.get(id=kwargs['id'])
         task.delete()
         messages.success(request, 'Task Deleted Successfully')
         return redirect('manager-dashboard')
-    else:
+
+    def get(self, request, *args, **kwargs):
         messages.error(request, 'Something went wrong')
         return redirect('manager-dashboard')
+
+
+class DashboardView(LoginRequiredMixin, View):
+    def get(self, request, *args, **kwargs):
+        if is_manager(request.user):
+            return redirect('manager-dashboard')
+        elif is_employee(request.user):
+            return redirect('user-dashboard')
+        elif is_admin(request.user):
+            return redirect('admin-dashboard')
+        return redirect('no-permission')
 
 
 @login_required
@@ -269,15 +282,3 @@ class TaskDetail(DetailView):
         task.status = selected_status
         task.save()
         return redirect('task-details', task.id)
-
-
-@login_required
-def dashboard(request):
-    if is_manager(request.user):
-        return redirect('manager-dashboard')
-    elif is_employee(request.user):
-        return redirect('user-dashboard')
-    elif is_admin(request.user):
-        return redirect('admin-dashboard')
-
-    return redirect('no-permission')
